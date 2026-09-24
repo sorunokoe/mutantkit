@@ -22,6 +22,38 @@ public struct SwiftPackageMacOSAdapter: Sendable {
     func productsDirectory(in workspace: URL) -> URL {
         workspace.appendingPathComponent(".build/debug", isDirectory: true)
     }
+
+    /// Where the package under test actually lives inside `workspace` —
+    /// `workspace` itself when `project.path` is unset, empty, `"."`, or
+    /// absolute; `workspace` plus that (necessarily relative) path
+    /// otherwise.
+    ///
+    /// `project.path` is documented (see `SwiftPMLiveSourceResolution`'s own
+    /// "package lives elsewhere" comment, and `diagnose()` below) as the
+    /// supported way to point mutantkit at a package that is not itself at
+    /// `--project-root` — a monorepo umbrella one level up from the real
+    /// package, most plausibly, so that package's own local
+    /// `.package(path:)` siblings are cloned into the sandbox alongside it
+    /// (`WorkspaceManager.createSandbox` clones `--project-root`'s entire
+    /// contents verbatim, siblings included). Plan-time discovery already
+    /// honors this (`SwiftPMLiveSourceResolution.packageLocation`'s
+    /// `root.appendingPathComponent(path)`) — this mirrors that exact
+    /// resolution so the actual sandboxed `swift build`/`swift test`
+    /// invocation runs at the same place plan-time already decided the
+    /// package lives, instead of at the sandbox's own root (which has no
+    /// `Package.swift` of its own when `project.path` is set to a
+    /// subdirectory).
+    ///
+    /// Absolute paths are left unresolved, deliberately: `workspace` here is
+    /// always a sandbox clone of `--project-root`'s own contents, and an
+    /// absolute `project.path` cannot express "somewhere inside this
+    /// sandbox" the way a relative one does — the pre-existing, unresolved
+    /// behavior is preserved for that case rather than guessed at.
+    func resolvedWorkspace(_ workspace: URL) -> URL {
+        guard let path = configuration.project.path, !path.isEmpty, path != "." else { return workspace }
+        guard !path.hasPrefix("/") else { return workspace }
+        return workspace.appendingPathComponent(path)
+    }
 }
 
 // MARK: - Build
@@ -177,7 +209,13 @@ extension SwiftPackageMacOSAdapter: BuildAdapter {
         return await SharedModuleCacheNamespace.shared.moduleCachePath(forSandbox: workspace, workingDirectory: workspace)
     }
 
-    private func build(in workspace: URL, extraArguments: [String] = []) async throws -> BuildArtifact {
+    private func build(in rawWorkspace: URL, extraArguments: [String] = []) async throws -> BuildArtifact {
+        // Resolved once, here: every use below (the process's own
+        // `workingDirectory`, and `productsDirectory(in:)` for the artifact
+        // this returns) must agree on where the package actually is — see
+        // `resolvedWorkspace(_:)`'s own doc comment.
+        let workspace = resolvedWorkspace(rawWorkspace)
+
         // `--build-tests` so the test bundle exists before `swift test --skip-build`
         // runs. Without it the test step would silently rebuild, and the build and
         // test timings — which drive the adaptive mutant timeout — would be wrong.
@@ -259,7 +297,7 @@ extension SwiftPackageMacOSAdapter: SchemataBuildable {
         context: SchemataBuildReceiptContext
     ) async throws -> SchemataBuildReceipt {
         let discovered = try SchemataBuiltImageInspection.inspect(productsDirectory: artifact.productsDirectory)
-        let graph = try await SwiftPMTargetResolver.resolveDependencyGraph(projectRoot: workspace)
+        let graph = try await SwiftPMTargetResolver.resolveDependencyGraph(projectRoot: resolvedWorkspace(workspace))
 
         // Keyed by the *request's own* `buildTarget` — the chunk planner's
         // already-authoritative identity — never a value this resolver
@@ -365,7 +403,7 @@ extension SwiftPackageMacOSAdapter: TestAdapter {
     }
 
     private func runTests(
-        in workspace: URL,
+        in rawWorkspace: URL,
         timeoutSeconds: Double,
         enableCoverage: Bool = false,
         skipBuild: Bool? = nil,
@@ -374,6 +412,13 @@ extension SwiftPackageMacOSAdapter: TestAdapter {
         reliableExpectedTestCount: Int? = nil,
         scratchPath: URL? = nil
     ) async throws -> TestRunResult {
+        // Resolved exactly when this is an ordinary sandboxed run
+        // (`scratchPath == nil`): a `scratchPath` call already passes an
+        // explicitly-resolved `--package-path` (see `runConfirmationRetest`),
+        // and re-resolving it here would join `project.path` on top a second
+        // time. See `resolvedWorkspace(_:)`'s own doc comment.
+        let workspace = scratchPath == nil ? resolvedWorkspace(rawWorkspace) : rawWorkspace
+
         // Written inside `scratchPath` when one is given (a disposable
         // confirmation clone), `workspace` otherwise -- `workspace` can now
         // be the read-only `projectRoot` (see `scratchPath` below).
@@ -500,8 +545,13 @@ extension SwiftPackageMacOSAdapter: PackageManifestConfirmationRetesting {
         timeoutSeconds: Double,
         selectedTests: Set<TestIdentifier>?
     ) async throws -> TestRunResult {
+        // `packageRoot` here is the real, unsandboxed `--project-root` (not
+        // a sandbox clone), so it needs the same `project.path` join
+        // `resolvedWorkspace(_:)` applies everywhere else — `runTests`
+        // itself will not do this automatically, because `scratchPath`
+        // (below) tells it `packageRoot` is already resolved.
         try await runTests(
-            in: packageRoot,
+            in: resolvedWorkspace(packageRoot),
             timeoutSeconds: timeoutSeconds,
             enableCoverage: false,
             testFilters: Self.testFilterArguments(for: selectedTests),
@@ -545,7 +595,11 @@ extension SwiftPackageMacOSAdapter: CoverageMeasuring {
         // SwiftPM writes codecov JSON under `.build/<arch>/<build>/codecov/`.
         // `.build/debug` is normally a symlink to the real path; resolving it
         // is what makes the enumerator actually descend (HANDOVER §3-3).
-        let buildDir = productsDirectory(in: workspace).resolvingSymlinksInPath()
+        //
+        // Resolved: this is where the build actually ran (see
+        // `resolvedWorkspace(_:)`), which is where its `.build` directory
+        // — and the codecov JSON under it — actually landed on disk.
+        let buildDir = productsDirectory(in: resolvedWorkspace(workspace)).resolvingSymlinksInPath()
         let codecovDir = buildDir.appendingPathComponent("codecov", isDirectory: true)
         // The codecov paths are absolute and rooted at the *sandbox*, because
         // that is where the instrumented binary was built. The plan, however,
@@ -553,6 +607,12 @@ extension SwiftPackageMacOSAdapter: CoverageMeasuring {
         // the project tree — so stripping the *workspace* prefix (not the
         // caller's `projectRoot`) yields the same repo-relative shape the plan
         // uses. Passing `projectRoot` here would match nothing.
+        //
+        // Deliberately the raw, unresolved `workspace` — not
+        // `resolvedWorkspace(workspace)` — so the stripped shape keeps
+        // whatever `project.path` prefix the plan itself expresses (see
+        // `SwiftPMLiveSourceResolution.resolve`'s own `relativePackagePath`
+        // prefixing), rather than a shape with that prefix already removed.
         return SourceCoverageReader.read(directory: codecovDir, projectRoot: workspace)
     }
 }
@@ -668,7 +728,7 @@ extension SwiftPackageMacOSAdapter: TestSelecting {
         timeoutSeconds: Double
     ) async -> PerTestCoverageMap? {
         let enumerated = await Self.enumerateTestIdentifiers(
-            in: workspace,
+            in: resolvedWorkspace(workspace),
             timeoutSeconds: timeoutSeconds,
             terminationGracePeriodSeconds: configuration.timeouts.terminationGracePeriodSeconds
         )
