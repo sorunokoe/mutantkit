@@ -24,7 +24,7 @@ struct MutationEvidenceAssembler: Sendable {
     let artifactsRoot: URL?
     let resultCache: MutationResultCache?
     let resultCacheDigest: String?
-    let progress: ProgressReporter?
+    let progress: MutationProgressReporter?
     let operationalIssues: OperationalIssueLog
 
     /// The confirmation policy this run is actually gated on — passed to

@@ -42,7 +42,7 @@ public enum PerTestCoverageAttribution {
         tests: [TestIdentifier],
         source: String,
         attempts: Int = 2,
-        progress: ProgressReporter? = nil,
+        progress: MutationProgressReporter? = nil,
         attempt: (TestIdentifier, Int) async -> CoverageMap?
     ) async -> PerTestCoverageMap? {
         var coveringTests: [String: [Int: Set<TestIdentifier>]] = [:]

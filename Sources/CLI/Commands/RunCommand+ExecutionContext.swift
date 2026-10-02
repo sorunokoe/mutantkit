@@ -187,7 +187,7 @@ extension RunCommand {
         let resultCache: MutationResultCache?
         let resultCacheDigest: String?
         let priorityStore: TestPriorityStore?
-        let progress: ProgressReporter?
+        let progress: MutationProgressReporter?
     }
 
     /// Everything `runAfterSimulatorPoolProvisioned` needs from the

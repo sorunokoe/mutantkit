@@ -312,7 +312,7 @@ public struct SchemataMutationRunner: Sendable {
     /// build-and-test work, so it is what a human watching the run is
     /// actually waiting on. The isolated backend counts mutants for the same
     /// reason — there, one mutant is one build-and-test cycle.
-    private let progress: ProgressReporter?
+    private let progress: MutationProgressReporter?
 
     public init(
         planID: String,
@@ -334,7 +334,7 @@ public struct SchemataMutationRunner: Sendable {
         coverageCacheKey: CoverageProfileCache.Key? = nil,
         preEstablishedBaseline: SharedBaselineEstablisher.Outcome? = nil,
         schemataTokenBatchSize: Int = 1,
-        progress: ProgressReporter? = nil
+        progress: MutationProgressReporter? = nil
     ) {
         self.planID = planID
         self.workUnitID = workUnitID

@@ -750,7 +750,7 @@ extension SwiftPackageMacOSAdapter: TestSelecting {
         // here, is how one test is run and how its coverage is read back.
         return await PerTestCoverageAttribution.attribute(
             tests: tests, source: "swiftpm-codecov-per-test",
-            progress: ProgressReporter(total: tests.count, label: "per-test coverage")
+            progress: MutationProgressReporter(total: tests.count, label: "per-test coverage")
         ) { test, _ in
             guard let run = try? await runTests(
                 in: workspace,

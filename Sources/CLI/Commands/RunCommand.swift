@@ -350,7 +350,7 @@ struct RunCommand: AsyncParsableCommand {
                 // on the *fallback* plan (see `runFallbackPortion`) — this
                 // total would stall short of completion there, since most of
                 // the plan never reaches that portion.
-                progress: ProgressReporter(total: loadedPlan.mutations.count, label: "mutants")
+                progress: MutationProgressReporter(total: loadedPlan.mutations.count, label: "mutants")
             )
         )
 
