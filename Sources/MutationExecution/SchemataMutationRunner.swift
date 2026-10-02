@@ -1696,12 +1696,17 @@ public struct SchemataMutationRunner: Sendable {
             // record, not one summary string, so each is independently
             // readable.
             for (index, record) in observation.transcript.records.enumerated() {
-                let (kind, runID, unitID, tok): (String, RunID, CompilationUnitID, SchemataSelectorToken) = switch record {
+                let (kind, runID, unitID, tok): (String, RunID, CompilationUnitID?, SchemataSelectorToken) = switch record {
                 case let .startup(event): ("startup", event.runID, event.compilationUnitID, event.token)
                 case let .hit(event): ("hit", event.runID, event.compilationUnitID, event.token)
+                case let .loaded(event): ("loaded", event.runID, nil, event.token)
                 }
                 let runIDMatch = runID == expectation.runID ? "runID=match" : "runID=DIFFERENT(\(runID.rawValue))"
-                let unitMatch = unitID == expectation.compilationUnitID ? "unit=match" : "unit=DIFFERENT(\(unitID))"
+                let unitMatch = switch unitID {
+                case nil: "unit=none"
+                case expectation.compilationUnitID?: "unit=match"
+                case let unitID?: "unit=DIFFERENT(\(unitID))"
+                }
                 let tokenMatch = tok == expectation.selectorToken ? "token=match" : "token=DIFFERENT(\(tok))"
                 await GateTimingRecorder.shared.record(
                     "dynamicFallback.activation.\(reason).record[\(index)] kind=\(kind) \(runIDMatch) \(unitMatch) \(tokenMatch)",

@@ -76,7 +76,7 @@ public enum SchemataEvidenceCollector {
             case let .unsupportedProtocolVersion(version):
                 "record declares protocol version \(version), this host only understands \(SchemataEvidenceCollector.protocolVersion)"
             case let .unrecognizedEventType(type):
-                "record declares event type \(type), neither STARTUP (1) nor HIT (2)"
+                "record declares event type \(type), not STARTUP (1), HIT (2), or LOADED (3)"
             case .invalidLocalIndex:
                 "record's localIndex is 0, the reserved inactive sentinel — never a valid token in a genuine event"
             }
@@ -146,6 +146,10 @@ public enum SchemataEvidenceCollector {
             return .hit(RuntimeHitEvent(
                 runID: runID, sourceEmbeddingID: sourceEmbeddingID, compilationUnitID: compilationUnitID, token: token,
                 processID: processID, sequence: sequenceValue, imageUUID: imageUUID, runtimeABIVersion: runtimeABIValue
+            ))
+        case 3:
+            return .loaded(RuntimeLoadedEvent(
+                runID: runID, token: token, processID: processID, imageUUID: imageUUID, runtimeABIVersion: runtimeABIValue
             ))
         default:
             throw ParseError.unrecognizedEventType(eventType)

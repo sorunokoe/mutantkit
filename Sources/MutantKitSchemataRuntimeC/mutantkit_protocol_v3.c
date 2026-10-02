@@ -169,6 +169,29 @@ static void mutantkit_v3_write_record(
     close(fd);
 }
 
+// MARK: - Image load
+
+__attribute__((constructor)) static void mutantkit_v3_record_image_loaded(void) {
+    pthread_once(&mutantkit_v3_environment_once, mutantkit_v3_parse_environment);
+    if (!mutantkit_v3_environment.has_token) {
+        return;
+    }
+
+    Dl_info info;
+    if (dladdr((const void *)&mutantkit_v3_record_image_loaded, &info) == 0 || info.dli_fbase == NULL) {
+        return;
+    }
+    mutantkit_unit_descriptor_v3_t descriptor;
+    memset(&descriptor, 0, sizeof(descriptor));
+    if (!mutantkit_v3_uuid_from_header((const struct mach_header_64 *)info.dli_fbase, descriptor.image_uuid)) {
+        return;
+    }
+    descriptor.valid = true;
+    mutantkit_v3_write_record(
+        MUTANTKIT_EVENT_LOADED, &descriptor, mutantkit_v3_environment.namespace_, mutantkit_v3_environment.local_index
+    );
+}
+
 // MARK: - Public API
 
 const mutantkit_unit_descriptor_v3_t *mutantkit_register_unit_v3(

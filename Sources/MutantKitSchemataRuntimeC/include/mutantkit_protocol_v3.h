@@ -31,7 +31,15 @@
 
 typedef enum {
     MUTANTKIT_EVENT_STARTUP = 1,
-    MUTANTKIT_EVENT_HIT = 2
+    MUTANTKIT_EVENT_HIT = 2,
+    /// Written once per image, at load time, by this runtime's own
+    /// constructor -- proof the runtime was linked into and loaded by the
+    /// test process with this run's token, independent of whether any
+    /// mutated site ever executes. Lets a host tell "the mutated code was
+    /// never reached" apart from "the runtime never ran at all". Its
+    /// digest fields are zero: it belongs to an image, not a compilation
+    /// unit.
+    MUTANTKIT_EVENT_LOADED = 3
 } mutantkit_event_type_t;
 
 #pragma pack(push, 1)

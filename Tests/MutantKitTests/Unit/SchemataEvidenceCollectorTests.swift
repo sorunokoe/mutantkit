@@ -88,6 +88,27 @@ struct SchemataEvidenceCollectorTests {
         #expect(event.runID == Self.runID)
     }
 
+    @Test("A well-formed LOADED record parses correctly")
+    func parsesWellFormedLoadedRecord() throws {
+        let data = record(eventType: 3, sourceEmbeddingID: Self.hex32Bytes(0), compilationUnitID: Self.hex32Bytes(0), sequence: 0)
+        let transcript = try SchemataEvidenceCollector.parseTranscript(from: data)
+        guard case let .loaded(event) = try #require(transcript.records.first) else {
+            Issue.record("expected a loaded event")
+            return
+        }
+        #expect(event.token == Self.token)
+        #expect(event.runID == Self.runID)
+        #expect(event.processID == 4242)
+        #expect(event.imageUUID.rawValue == String(repeating: "cc", count: 16))
+    }
+
+    @Test("An unknown event type is refused")
+    func refusesUnknownEventType() {
+        #expect(throws: SchemataEvidenceCollector.ParseError.unrecognizedEventType(4)) {
+            try SchemataEvidenceCollector.parseTranscript(from: record(eventType: 4))
+        }
+    }
+
     @Test("A well-formed HIT record parses correctly")
     func parsesWellFormedHitRecord() throws {
         let transcript = try SchemataEvidenceCollector.parseTranscript(from: hitRecord(sequence: 7))
