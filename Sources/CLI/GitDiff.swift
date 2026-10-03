@@ -27,7 +27,7 @@ enum GitDiff {
     static func changedLines(since base: String, in root: URL) async throws -> DiffScope {
         let result = try await ProcessSupervisor.run(
             executable: "/usr/bin/git",
-            arguments: ["diff", "--unified=0", "--no-color", "--no-ext-diff", base, "--", "*.swift"],
+            arguments: ["diff", "--relative", "--unified=0", "--no-color", "--no-ext-diff", base, "--", "*.swift"],
             workingDirectory: root,
             timeoutSeconds: 120
         )

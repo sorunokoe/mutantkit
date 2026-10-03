@@ -174,6 +174,23 @@ struct GitDiffTests {
         #expect(scope.changedLines["Foo.swift"] == [2 ..< 3])
     }
 
+    @Test("changedLines reports paths relative to a project root nested inside the repository")
+    func changedLinesIsRelativeToANestedProjectRoot() async throws {
+        let repository = try await makeGitRepository()
+        defer { try? FileManager.default.removeItem(at: repository) }
+        let projectRoot = repository.appendingPathComponent("App")
+        try FileManager.default.createDirectory(at: projectRoot, withIntermediateDirectories: true)
+        try Data("func added() {}\n".utf8).write(to: projectRoot.appendingPathComponent("Bar.swift"))
+        try Data("func original() {}\nfunc added() {}\n".utf8).write(to: repository.appendingPathComponent("Foo.swift"))
+        let result = try await ProcessSupervisor.run(
+            executable: "/usr/bin/git", arguments: ["add", "-N", "."], workingDirectory: repository, timeoutSeconds: 30
+        )
+        try #require(result.succeeded)
+
+        let scope = try await GitDiff.changedLines(since: "HEAD", in: projectRoot)
+        #expect(scope.changedLines == ["Bar.swift": [1 ..< 2]])
+    }
+
     @Test("changedLines against a base that does not exist throws GitDiffError.gitFailed with git's own message")
     func changedLinesAgainstUnknownBaseThrows() async throws {
         let root = try await makeGitRepository()
