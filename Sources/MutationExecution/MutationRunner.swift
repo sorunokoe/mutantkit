@@ -52,7 +52,7 @@ public struct MutationRunner: Sendable {
     private let priorityStore: TestPriorityStore?
     private let monotonicNow: @Sendable () -> TimeInterval
     private let operationalIssues = OperationalIssueLog()
-    private let progress: ProgressReporter?
+    private let progress: MutationProgressReporter?
     /// When supplied, `establishBaseline()` uses this instead of building
     /// and testing the project itself — `SchemataRunOrchestration`'s own
     /// mechanism for sharing one baseline between the schemata and
@@ -143,7 +143,7 @@ public struct MutationRunner: Sendable {
         resultCache: MutationResultCache? = nil,
         resultCacheDigest: String? = nil,
         priorityStore: TestPriorityStore? = nil,
-        progress: ProgressReporter? = nil,
+        progress: MutationProgressReporter? = nil,
         preEstablishedBaseline: SharedBaselineEstablisher.Outcome? = nil,
         monotonicNow: @escaping @Sendable () -> TimeInterval = {
             Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000_000

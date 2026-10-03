@@ -248,7 +248,17 @@ enum SchemataRunOrchestration {
         do {
             switch context.adapter.kind {
             case .swiftPackageMacOS, .swiftPackageApple:
-                targetInfo = try await SwiftPMTargetResolver.resolveTargetInfo(projectRoot: context.projectRoot)
+                // Same `project.path` resolution plan-time discovery uses, so
+                // the keys line up with `MutationPoint.file` for a package
+                // nested under an umbrella `--project-root`.
+                let location = SwiftPMLiveSourceResolution.packageLocation(
+                    path: context.configuration.project.path, root: context.projectRoot
+                )
+                guard case let .resolvable(packageRoot, prefix) = location else {
+                    print("! project.path is outside --project-root; every mutation will run in isolated mode this run.")
+                    return empty
+                }
+                targetInfo = try await SwiftPMTargetResolver.resolveTargetInfo(projectRoot: packageRoot, pathPrefix: prefix)
                 backendID = "swiftpm-schemata-v1"
             case .xcodeProject:
                 targetInfo = try await XcodeTargetResolver.resolveTargetInfo(projectRoot: context.projectRoot)
@@ -402,7 +412,7 @@ enum SchemataRunOrchestration {
             // report, which on a real project is hours — and "is it stuck or
             // just slow" then has no answer short of looking for the
             // backend's child processes in `ps`.
-            progress: ProgressReporter(total: inputs.programs.count, label: "schemata chunks")
+            progress: MutationProgressReporter(total: inputs.programs.count, label: "schemata chunks")
         )
         do {
             let outcome = try await runner.run()
@@ -461,7 +471,7 @@ enum SchemataRunOrchestration {
             // mutations that actually fell back run here, so the plan's own
             // count would leave the counter stalling permanently short of
             // completion — which reads exactly like a hung run.
-            progress: ProgressReporter(total: fallbackPlan.mutations.count, label: "fallback mutants"),
+            progress: MutationProgressReporter(total: fallbackPlan.mutations.count, label: "fallback mutants"),
             // `sharedBaseline` (see `run()`) means this pass never builds or
             // tests the unmutated project itself — see
             // `SharedBaselineEstablisher`'s own doc comment for why.

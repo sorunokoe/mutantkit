@@ -66,7 +66,9 @@ struct DryRunCommand: AsyncParsableCommand {
         """)
 
         let scratch = root.appendingPathComponent(".mutantkit/dry-run")
-        let workspaces = try WorkspaceManager(projectRoot: root, scratchRoot: scratch)
+        let workspaces = try WorkspaceManager(
+            projectRoot: root, scratchRoot: scratch, linkSiblings: settings.project.linkSiblings ?? []
+        )
         let id = "dry-run-baseline"
         let expected = scratch.appendingPathComponent(WorkspaceManager.directoryName(for: id))
         if FileManager.default.fileExists(atPath: expected.path) {

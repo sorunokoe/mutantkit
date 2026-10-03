@@ -11,7 +11,7 @@ import MutationModel
 enum Diagnostics {
     /// Every check for an xcodebuild-driven project, in the order a user reads them.
     static func full(adapter: XcodeBuildAdapter) async -> BuildDiagnosis {
-        let workspace = URL(fileURLWithPath: adapter.configuration.project.path ?? ".")
+        let workspace = workspace(for: adapter)
         var items: [DiagnosisItem] = []
 
         items.append(await xcodeVersion(workingDirectory: workspace))
@@ -32,6 +32,15 @@ enum Diagnostics {
         items.append(contentsOf: await buildForTesting(adapter: adapter, workspace: workspace))
 
         return BuildDiagnosis(items: items)
+    }
+
+    /// Where every doctor check runs: the `--project-root`, never the current
+    /// directory. CI usually starts `mutantkit` from the repository root, where
+    /// there is no workspace, so a cwd-relative check failed `build-for-testing`
+    /// with xcodebuild's bare exit 66. `projectFileRelativePath` is relative to
+    /// this same root, so the build finds the workspace it was resolved against.
+    static func workspace(for adapter: XcodeBuildAdapter) -> URL {
+        adapter.projectRoot
     }
 
     // MARK: - Toolchain
@@ -356,7 +365,9 @@ extension Diagnostics {
                 name: "build-for-testing",
                 status: .failure,
                 code: .trialBuild,
-                detail: failure.diagnosis,
+                detail: failure.kind == .compilationError
+                    ? failure.diagnosis
+                    : failure.diagnosis + outputTail(failure.output),
                 remedy: failure.kind == .compilationError
                     ? "Fix the build first: mutation testing needs a project that compiles as-is."
                     : "Resolve the environment problem above, then run doctor again."
@@ -370,6 +381,16 @@ extension Diagnostics {
                 remedy: "Run the same xcodebuild command by hand to see the full output."
             )]
         }
+    }
+
+    /// The last lines of a failed build's output, so an environment failure
+    /// (no compiler diagnostic to quote) still shows what xcodebuild said.
+    static func outputTail(_ output: String, lines: Int = 20) -> String {
+        let tail = output
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .suffix(lines)
+        guard !tail.isEmpty else { return "" }
+        return "\nLast \(tail.count) line(s) of build output:\n" + tail.joined(separator: "\n")
     }
 
     /// Reads test target names out of the `.xctestrun` plist. `nil` means

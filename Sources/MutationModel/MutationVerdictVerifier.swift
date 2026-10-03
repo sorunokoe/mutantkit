@@ -168,6 +168,7 @@ public enum MutationVerdictVerifier {
     public static func schemataIsolatedFallbackReason(for observations: MutationObservations) -> SchemataIsolatedFallbackReason? {
         guard let test = observations.test, test.run.status == .passed else { return nil }
         guard case let .schemata(observation)? = test.applicationEvidence else { return nil }
+        guard !provesSiteNeverReached(observation) else { return nil }
         do {
             _ = try verifySchemataChain(observation)
             return nil
@@ -484,6 +485,13 @@ public enum MutationVerdictVerifier {
                 )
             }
             guard case .success = chain else {
+                if provesSiteNeverReached(observation) {
+                    return Classification(
+                        outcome: .noCoverage,
+                        diagnosis: "\(passed), and the MutantKit runtime proves it was loaded in the test process, but the mutated code was never reached.",
+                        decidingRun: run
+                    )
+                }
                 return Classification(
                     outcome: .infrastructureFailure,
                     diagnosis: "\(passed), but \(schemataChainDiagnosis(chain))",
@@ -696,6 +704,37 @@ public enum MutationVerdictVerifier {
         guard !processes.isEmpty else { throw SchemataChainError.noHit }
 
         return VerifiedSchemataChain(unit: unit, image: image, processes: processes)
+    }
+
+    /// Whether the chain fails *only* for lack of a STARTUP or HIT while the
+    /// runtime's own LOADED record proves it was loaded, under this run's
+    /// token, into the exact image the receipt names for this mutation.
+    /// Registration and the HIT record both fire the first time a mutated
+    /// site in that image runs, so this proves the site was never reached
+    /// rather than that the runtime failed to report.
+    private static func provesSiteNeverReached(_ observation: SchemataExecutionObservation) -> Bool {
+        do {
+            _ = try verifySchemataChain(observation)
+            return false
+        } catch SchemataChainError.noStartup, SchemataChainError.noHit {
+            let expectation = observation.expectation
+            guard let receipt = observation.buildReceipt,
+                  let unit = try? exactlyOne(
+                      receipt.compilationUnits.filter {
+                          $0.compilationUnitID == expectation.compilationUnitID && $0.sourceEmbeddingID == expectation.sourceEmbeddingID
+                      },
+                      or: .nonUniqueCompilationUnit
+                  ),
+                  let image = try? exactlyOne(receipt.images.filter { $0.buildTarget == unit.buildTarget }, or: .nonUniqueBuiltImage)
+            else { return false }
+            return observation.transcript.records.contains { record in
+                guard case let .loaded(event) = record else { return false }
+                return event.runID == expectation.runID && event.token == expectation.selectorToken
+                    && image.slices.contains { $0.imageUUID == event.imageUUID }
+            }
+        } catch {
+            return false
+        }
     }
 
     private static func schemataChainDiagnosis(_ chain: Result<VerifiedSchemataChain, Error>) -> String {

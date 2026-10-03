@@ -41,7 +41,7 @@ struct RunObservabilityTests {
     @Test("Progress counters name what they are counting, and estimate what is left")
     func progressLinesAreLabelledAndEstimate() async {
         let started = Date(timeIntervalSince1970: 0)
-        let reporter = ProgressReporter(total: 10, label: "per-test coverage", startedAt: started)
+        let reporter = MutationProgressReporter(total: 10, label: "per-test coverage", startedAt: started)
 
         // One of ten done after 60s: nine left at the same rate is ~9m.
         await reporter.recordCompletion(now: started.addingTimeInterval(60))
@@ -55,7 +55,7 @@ struct RunObservabilityTests {
     @Test("An unlabelled counter stays exactly as it read before labels existed")
     func unlabelledCounterIsUnchanged() async {
         let started = Date(timeIntervalSince1970: 0)
-        let reporter = ProgressReporter(total: 4, startedAt: started)
+        let reporter = MutationProgressReporter(total: 4, startedAt: started)
 
         await reporter.recordCompletion(now: started.addingTimeInterval(10))
 
@@ -68,7 +68,7 @@ struct RunObservabilityTests {
     @Test("The attribution loop reports one completion per test, including for unprovable ones")
     func attributionLoopReportsEveryTest() async {
         let tests = (1 ... 5).map { TestIdentifier(target: "T", qualifiedName: "S/test\($0)") }
-        let progress = ProgressReporter(total: tests.count, label: "per-test coverage")
+        let progress = MutationProgressReporter(total: tests.count, label: "per-test coverage")
 
         _ = await PerTestCoverageAttribution.attribute(
             tests: tests, source: "test", attempts: 1, progress: progress

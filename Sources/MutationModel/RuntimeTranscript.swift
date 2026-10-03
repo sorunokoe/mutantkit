@@ -55,6 +55,25 @@ public struct RuntimeHitEvent: Codable, Sendable, Hashable {
     }
 }
 
+/// The runtime's own image-load record, decoded from a v3 LOADED record —
+/// proof the runtime was linked into, and loaded by, a test process that
+/// was handed this run's token, whether or not any mutated site ever ran.
+public struct RuntimeLoadedEvent: Codable, Sendable, Hashable {
+    public let runID: RunID
+    public let token: SchemataSelectorToken
+    public let processID: Int32
+    public let imageUUID: ImageUUID
+    public let runtimeABIVersion: UInt32
+
+    public init(runID: RunID, token: SchemataSelectorToken, processID: Int32, imageUUID: ImageUUID, runtimeABIVersion: UInt32) {
+        self.runID = runID
+        self.token = token
+        self.processID = processID
+        self.imageUUID = imageUUID
+        self.runtimeABIVersion = runtimeABIVersion
+    }
+}
+
 /// One decoded v3 event record — a STARTUP or a HIT, never filtered or
 /// picked among by whatever parses raw transcript bytes into these (ADR-0006
 /// Finding 3): ambiguity between two candidate events is a fact for a
@@ -64,6 +83,7 @@ public struct RuntimeHitEvent: Codable, Sendable, Hashable {
 public enum RuntimeEventRecord: Codable, Sendable, Hashable {
     case startup(RuntimeStartupEvent)
     case hit(RuntimeHitEvent)
+    case loaded(RuntimeLoadedEvent)
 }
 
 /// Every event one schemata test process's runtime wrote, in the order the

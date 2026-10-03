@@ -96,7 +96,8 @@ public actor WorkspaceManager {
         projectRoot: URL,
         scratchRoot: URL,
         excludes: [String] = WorkspaceManager.defaultExcludes,
-        cleanSubtreeCloning: Bool = false
+        cleanSubtreeCloning: Bool = false,
+        linkSiblings: [String] = []
     ) throws {
         self.projectRoot = projectRoot.standardizedFileURL
         self.excludes = excludes
@@ -140,6 +141,41 @@ public actor WorkspaceManager {
         try? FileManager.default.removeItem(
             at: self.scratchRoot.appendingPathComponent(Self.moduleCacheDirectoryName, isDirectory: true)
         )
+
+        Self.linkProjectRootSiblings(linkSiblings, of: self.projectRoot, into: self.scratchRoot)
+    }
+
+    /// Gives every sandbox the neighbours `project.linkSiblings` names.
+    ///
+    /// A sandbox sits at `<scratchRoot>/<name>`, standing in for the project
+    /// root, so a relative reference that steps one level out of the root —
+    /// e.g. a SwiftPM `.binaryTarget(path: "../../shared/App.xcframework")` in a
+    /// monorepo where `--project-root` is the iOS directory — resolves against
+    /// `scratchRoot` instead of the root's real parent, finds nothing, and fails
+    /// the baseline build with no compiler diagnostic. A symlink in
+    /// `scratchRoot` per named sibling makes those references resolve to the
+    /// real files again. Sources are never mutated through these links: every
+    /// planned file lives inside the project root, which is copied, not linked.
+    ///
+    /// Opt-in rather than every sibling: a project root's parent can be a whole
+    /// directory of unrelated projects. Names are validated by
+    /// `ConfigurationValidator`; an existing entry is replaced only if it is
+    /// itself a link, so a sandbox directory is never touched.
+    static func linkProjectRootSiblings(_ names: [String], of projectRoot: URL, into scratchRoot: URL) {
+        let parent = projectRoot.deletingLastPathComponent()
+        let fileManager = FileManager.default
+        for name in names {
+            let link = scratchRoot.appendingPathComponent(name)
+            if (try? fileManager.destinationOfSymbolicLink(atPath: link.path)) != nil {
+                try? fileManager.removeItem(at: link)
+            } else if fileManager.fileExists(atPath: link.path) {
+                continue
+            }
+            try? fileManager.createSymbolicLink(
+                atPath: link.path,
+                withDestinationPath: parent.appendingPathComponent(name).path
+            )
+        }
     }
 
     // MARK: - Lifecycle

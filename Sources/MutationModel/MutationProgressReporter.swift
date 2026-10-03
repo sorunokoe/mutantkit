@@ -9,7 +9,7 @@ import Foundation
 /// cycle) previously gave a human watching it no signal beyond silence
 /// until the final report — this exists so "is it stuck or just slow" has
 /// an answer without reaching for `wc -l` on the checkpoint file.
-public actor ProgressReporter {
+public actor MutationProgressReporter {
     private let total: Int
     private let label: String
     private let startedAt: Date

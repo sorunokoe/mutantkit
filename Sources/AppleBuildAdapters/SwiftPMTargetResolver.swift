@@ -85,12 +85,21 @@ public enum SwiftPMTargetResolver {
     /// `SchemataChunkPlanner` already understands and routes this case to
     /// isolated fallback (`multipleTargetsNotYetSupported`), it does not
     /// need to be resolved here.
-    public static func resolveTargetInfo(projectRoot: URL, timeoutSeconds: Double = 120) async throws -> [String: [SchemataTargetInfo]] {
+    ///
+    /// `pathPrefix` rebases those keys when the package is not itself the
+    /// project root (`project.path: Foundation/Core` under an umbrella
+    /// `--project-root`): SwiftPM reports `Sources/Core/X.swift`, while every
+    /// `MutationPoint.file` is `Foundation/Core/Sources/Core/X.swift`.
+    /// Without it no planned file ever matched a key, and every mutation
+    /// silently fell back to isolated mode (`missingTargetInfo`).
+    public static func resolveTargetInfo(
+        projectRoot: URL, pathPrefix: String? = nil, timeoutSeconds: Double = 120
+    ) async throws -> [String: [SchemataTargetInfo]] {
         let decoded = try await describe(projectRoot: projectRoot, timeoutSeconds: timeoutSeconds)
-        return Self.targetInfo(from: decoded, projectRoot: projectRoot)
+        return Self.targetInfo(from: decoded, projectRoot: projectRoot, pathPrefix: pathPrefix)
     }
 
-    static func targetInfo(from decoded: DescribeOutput, projectRoot: URL) -> [String: [SchemataTargetInfo]] {
+    static func targetInfo(from decoded: DescribeOutput, projectRoot: URL, pathPrefix: String? = nil) -> [String: [SchemataTargetInfo]] {
         let projectIdentity = Self.projectIdentity(for: projectRoot)
         var targetInfo: [String: [SchemataTargetInfo]] = [:]
         for target in decoded.targets {
@@ -101,7 +110,8 @@ public enum SwiftPMTargetResolver {
                 product: target.productMemberships?.first ?? target.name
             )
             for source in target.sources {
-                let relativePath = "\(target.path)/\(source)"
+                let packageRelative = target.path == "." ? source : "\(target.path)/\(source)"
+                let relativePath = pathPrefix.map { "\($0)/\(packageRelative)" } ?? packageRelative
                 targetInfo[relativePath, default: []].append(info)
             }
         }

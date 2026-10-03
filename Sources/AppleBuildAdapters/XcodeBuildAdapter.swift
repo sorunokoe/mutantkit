@@ -22,6 +22,10 @@ public struct XcodeBuildAdapter: Sendable {
     /// mutant would then produce a binary identical to the baseline's and the run
     /// would report a confident, meaningless score.
     let projectFileRelativePath: String?
+    /// The `--project-root` this adapter was resolved against. `doctor` runs
+    /// its checks here rather than in the current directory, which in CI is
+    /// usually the repository root, not the project's.
+    let projectRoot: URL
     let resultReader: XCResultAdapter
     /// Shared across every mutant, which is the entire point: it is what stops two
     /// of them being handed the same device.
@@ -102,6 +106,7 @@ public struct XcodeBuildAdapter: Sendable {
         self.configuration = configuration
         self.kind = kind
         projectFileRelativePath = projectFile.flatMap { Self.relativePath(of: $0, under: projectRoot) }
+        self.projectRoot = projectRoot
         resultReader = XCResultAdapter()
         simulators = SimulatorPool(workingDirectory: projectRoot)
         self.resolvedDestination = resolvedDestination
@@ -127,6 +132,7 @@ public struct XcodeBuildAdapter: Sendable {
         self.configuration = configuration
         self.kind = kind
         projectFileRelativePath = projectFile.flatMap { Self.relativePath(of: $0, under: projectRoot) }
+        self.projectRoot = projectRoot
         resultReader = XCResultAdapter()
         self.simulators = simulators
         self.resolvedDestination = resolvedDestination
@@ -1518,7 +1524,7 @@ extension XcodeBuildAdapter: TestSelecting {
         // here, is how one test is run and how its coverage is read back.
         return await PerTestCoverageAttribution.attribute(
             tests: tests, source: "xcodebuild-xccov-per-test",
-            progress: ProgressReporter(total: tests.count, label: "per-test coverage")
+            progress: MutationProgressReporter(total: tests.count, label: "per-test coverage")
         ) { test, attempt in
             guard let run = try? await runTests(
                 artifact: coverageArtifact,

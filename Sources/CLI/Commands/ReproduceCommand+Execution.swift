@@ -21,9 +21,9 @@ extension ReproduceCommand {
     ///
     /// Deliberately outside `.mutantkit/sandboxes`: the runner destroys those,
     /// and the whole point of this command is a directory that survives.
-    func prepareFreshSandbox(root: URL, mutationID: String) async throws -> URL {
+    func prepareFreshSandbox(root: URL, mutationID: String, linkSiblings: [String] = []) async throws -> URL {
         let sandboxRoot = root.appendingPathComponent(".mutantkit/reproduce")
-        let workspaces = try WorkspaceManager(projectRoot: root, scratchRoot: sandboxRoot)
+        let workspaces = try WorkspaceManager(projectRoot: root, scratchRoot: sandboxRoot, linkSiblings: linkSiblings)
 
         // `WorkspaceManager.createSandbox` is intentionally incremental: it may
         // keep destination files whose size and mtime match, which is useful for
