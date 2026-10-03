@@ -344,4 +344,16 @@ struct DiagnosticsWorkspaceTests {
         #expect(adapter.projectFileRelativePath == "App.xcworkspace")
         #expect(workspace.appendingPathComponent("App.xcworkspace").path == "/tmp/repo/iosApp/App.xcworkspace")
     }
+
+    @Test("An environment build failure shows the end of the build output")
+    func outputTailKeepsLastLines() {
+        let output = (1 ... 30).map { "line \($0)" }.joined(separator: "\n")
+        let tail = Diagnostics.outputTail(output, lines: 3)
+        #expect(tail == "\nLast 3 line(s) of build output:\nline 28\nline 29\nline 30")
+    }
+
+    @Test("Empty build output adds nothing")
+    func outputTailEmpty() {
+        #expect(Diagnostics.outputTail("\n\n").isEmpty)
+    }
 }
