@@ -214,6 +214,19 @@ struct SchemataRuntimeProtocolV3Tests {
         }
     }
 
+    private static let loadedEventType: UInt8 = 3
+    private static let zeroDigestHex = String(repeating: "0", count: 64)
+
+    /// Every record except the image-level LOADED one, which the runtime
+    /// writes from its constructor before any compilation unit registers.
+    private func activationRecords(in transcript: Data?) -> [ParsedRecord] {
+        records(in: transcript).filter { $0.eventType != Self.loadedEventType }
+    }
+
+    private func loadedRecords(in transcript: Data?) -> [ParsedRecord] {
+        records(in: transcript).filter { $0.eventType == Self.loadedEventType }
+    }
+
     // MARK: - Happy path
 
     @Test("a matching token records STARTUP then HIT, and reports ACTIVE")
@@ -226,7 +239,15 @@ struct SchemataRuntimeProtocolV3Tests {
         ])
 
         #expect(result.output == "ACTIVE\n")
-        let parsed = records(in: result.transcript)
+        let all = records(in: result.transcript)
+        let loaded = try #require(all.first)
+        #expect(loaded.eventType == Self.loadedEventType) // written at image load, before anything else
+        #expect(loaded.runID == Self.runIDHex)
+        #expect(loaded.sourceEmbeddingID == Self.zeroDigestHex)
+        #expect(loaded.compilationUnitID == Self.zeroDigestHex)
+        #expect(loadedRecords(in: result.transcript).count == 1)
+
+        let parsed = activationRecords(in: result.transcript)
         #expect(parsed.count == 2)
         #expect(parsed[0].eventType == 1) // STARTUP
         #expect(parsed[1].eventType == 2) // HIT
@@ -243,6 +264,7 @@ struct SchemataRuntimeProtocolV3Tests {
         }
         #expect(parsed[1].namespaceValue == 928_374_982_374)
         #expect(parsed[1].localIndex == 17)
+        #expect(loaded.sequence < parsed[0].sequence)
         #expect(parsed[0].sequence < parsed[1].sequence)
 
         // Cross-check: the image UUID the C runtime recorded for the
@@ -253,6 +275,7 @@ struct SchemataRuntimeProtocolV3Tests {
         let inspected = try MachOReceiptExtractor().inspectImage(at: Self.harnessBinary())
         let extractedUUIDs = Set(inspected.slices.map(\.imageUUID.rawValue))
         #expect(extractedUUIDs.contains(parsed[0].imageUUID))
+        #expect(loaded.imageUUID == parsed[0].imageUUID)
     }
 
     // MARK: - Non-matching token
@@ -269,7 +292,8 @@ struct SchemataRuntimeProtocolV3Tests {
         )
 
         #expect(result.output == "INACTIVE\n")
-        let parsed = records(in: result.transcript)
+        #expect(loadedRecords(in: result.transcript).count == 1)
+        let parsed = activationRecords(in: result.transcript)
         #expect(parsed.count == 1)
         #expect(parsed[0].eventType == 1) // STARTUP only
     }
@@ -294,7 +318,7 @@ struct SchemataRuntimeProtocolV3Tests {
 
     // MARK: - Registration failure
 
-    @Test("malformed source embedding hex fails registration; nothing is ever recorded")
+    @Test("malformed source embedding hex fails registration; only the image LOADED record is written")
     func malformedSourceEmbeddingHexFailsRegistration() throws {
         let transcriptURL = makeTranscriptPath()
         let result = try run(
@@ -307,7 +331,8 @@ struct SchemataRuntimeProtocolV3Tests {
         )
 
         #expect(result.output == "REGISTER_FAILED\n")
-        #expect(result.transcript == nil || result.transcript?.isEmpty == true)
+        #expect(activationRecords(in: result.transcript).isEmpty)
+        #expect(loadedRecords(in: result.transcript).count == 1)
     }
 
     // MARK: - Missing run ID
@@ -359,13 +384,14 @@ struct SchemataRuntimeProtocolV3Tests {
         let second = try run(environment: environment)
 
         let parsed = records(in: second.transcript)
-        // The second process appended its own STARTUP+HIT after the
-        // first's two records already in the (shared) file -- 4 total,
-        // and the second process's own pair starts its sequence at 1
+        // The second process appended its own LOADED+STARTUP+HIT after the
+        // first's three records already in the (shared) file -- 6 total,
+        // and the second process's own records start their sequence at 1
         // again (a per-process counter, not a shared one).
-        #expect(parsed.count == 4)
-        #expect(parsed[2].sequence == 1)
-        #expect(parsed[3].sequence == 2)
-        #expect(parsed[2].processID != parsed[0].processID)
+        #expect(parsed.count == 6)
+        #expect(parsed[3].sequence == 1)
+        #expect(parsed[4].sequence == 2)
+        #expect(parsed[5].sequence == 3)
+        #expect(parsed[3].processID != parsed[0].processID)
     }
 }
