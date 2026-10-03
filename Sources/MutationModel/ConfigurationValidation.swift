@@ -185,6 +185,7 @@ public enum ConfigurationValidator {
         // cannot yet know whether `.schemata` is viable for this project.
 
         issues += validateDerivedDataPath(configuration.project.derivedDataPath, projectRoot: projectRoot)
+            + validateLinkSiblings(configuration.project.linkSiblings ?? [])
         // `validateProfileCoverageSkip` folded onto this same line (rather
         // than its own `issues += ...` statement, the shape every sibling
         // check above uses) specifically so adding it does not grow
@@ -267,6 +268,21 @@ public enum ConfigurationValidator {
     /// - Parameter projectRoot: see `validate`'s own parameter of the same
     ///   name. `nil` skips only the symlink check; the string-only checks
     ///   above always run.
+    /// `project.linkSiblings` entries become symlinks next to the sandboxes, so
+    /// each must be one plain, visible name: a path could place a link outside
+    /// the scratch directory, and `.`/`..`/hidden names would shadow it or a
+    /// repository's `.git`.
+    static func validateLinkSiblings(_ names: [String]) -> [ConfigurationIssue] {
+        names.filter { $0.isEmpty || $0.contains("/") || $0.hasPrefix(".") }.map { name in
+            ConfigurationIssue(
+                severity: .error,
+                path: "project.linkSiblings",
+                message: "'\(name)' must be the plain name of an entry next to the project root, "
+                    + "e.g. 'shared' — not a path, and not hidden."
+            )
+        }
+    }
+
     private static func validateDerivedDataPath(_ derivedDataPath: String?, projectRoot: URL?) -> [ConfigurationIssue] {
         guard let derivedDataPath else { return [] }
 
@@ -526,7 +542,8 @@ public enum ConfigurationJSONSchema {
             "path": { "type": ["string", "null"] },
             "scheme": { "type": ["string", "null"] },
             "destination": { "type": ["string", "null"] },
-            "derivedDataPath": { "type": ["string", "null"] }
+            "derivedDataPath": { "type": ["string", "null"] },
+            "linkSiblings": { "type": ["array", "null"], "items": { "type": "string" } }
           }
         },
         "sources": {

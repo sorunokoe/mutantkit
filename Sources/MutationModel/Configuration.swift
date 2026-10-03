@@ -190,19 +190,27 @@ public struct ProjectSettings: Codable, Sendable, Hashable {
     public var scheme: String?
     public var destination: String?
     public var derivedDataPath: String?
+    /// Names of entries next to the project root that each sandbox should see
+    /// next to itself too, for builds that reach one level out of the root
+    /// (e.g. `.binaryTarget(path: "../../shared/App.xcframework")` when
+    /// `--project-root` is a monorepo's iOS directory). See
+    /// `WorkspaceManager.linkProjectRootSiblings`.
+    public var linkSiblings: [String]?
 
     public init(
         kind: ProjectKind = .auto,
         path: String? = nil,
         scheme: String? = nil,
         destination: String? = nil,
-        derivedDataPath: String? = nil
+        derivedDataPath: String? = nil,
+        linkSiblings: [String]? = nil
     ) {
         self.kind = kind
         self.path = path
         self.scheme = scheme
         self.destination = destination
         self.derivedDataPath = derivedDataPath
+        self.linkSiblings = linkSiblings
     }
 
     public init(from decoder: Decoder) throws {
@@ -212,6 +220,7 @@ public struct ProjectSettings: Codable, Sendable, Hashable {
         scheme = try container.decodeIfPresent(String.self, forKey: .scheme)
         destination = try container.decodeIfPresent(String.self, forKey: .destination)
         derivedDataPath = try container.decodeIfPresent(String.self, forKey: .derivedDataPath)
+        linkSiblings = try container.decodeIfPresent([String].self, forKey: .linkSiblings)
     }
 }
 

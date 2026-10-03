@@ -14,7 +14,8 @@
         "path": { "type": ["string", "null"] },
         "scheme": { "type": ["string", "null"] },
         "destination": { "type": ["string", "null"] },
-        "derivedDataPath": { "type": ["string", "null"] }
+        "derivedDataPath": { "type": ["string", "null"] },
+        "linkSiblings": { "type": ["array", "null"], "items": { "type": "string" } }
       }
     },
     "sources": {

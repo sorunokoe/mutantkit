@@ -38,7 +38,7 @@ struct ConfigurationSchemaParityTests {
     @Test("project/sources/tests/operators sections each match their struct")
     func leafSections() throws {
         let schema = try schema
-        let project = ProjectSettings(kind: .auto, path: "p", scheme: "s", destination: "d", derivedDataPath: "dd")
+        let project = ProjectSettings(kind: .auto, path: "p", scheme: "s", destination: "d", derivedDataPath: "dd", linkSiblings: ["shared"])
         #expect(try encodedKeys(project) == section("project", in: schema))
 
         let sources = SourceSettings(include: ["a"], exclude: ["b"])

@@ -304,7 +304,10 @@ struct RunCommand: AsyncParsableCommand {
         // state is actively harmful — SwiftPM records absolute paths in `.build`,
         // so a copy of it at a new path fails before it compiles anything.
         let workspaces = try WorkspaceManager(
-            projectRoot: root, scratchRoot: scratch, cleanSubtreeCloning: settings.resolved.execution.cleanSubtreeCloning
+            projectRoot: root,
+            scratchRoot: scratch,
+            cleanSubtreeCloning: settings.resolved.execution.cleanSubtreeCloning,
+            linkSiblings: settings.resolved.project.linkSiblings ?? []
         )
         if await workspaces.supportsAPFSClone() {
             print("Sandboxes: APFS clone (copy-on-write)")
@@ -423,7 +426,8 @@ struct RunCommand: AsyncParsableCommand {
             let schemataWorkspaces = try WorkspaceManager(
                 projectRoot: context.projectRoot,
                 scratchRoot: schemataScratch,
-                cleanSubtreeCloning: context.configuration.execution.cleanSubtreeCloning
+                cleanSubtreeCloning: context.configuration.execution.cleanSubtreeCloning,
+                linkSiblings: context.configuration.project.linkSiblings ?? []
             )
             // No timeout argument: this call site used to pass
             // `timeouts.baselineSeconds` as the *only* limit, which

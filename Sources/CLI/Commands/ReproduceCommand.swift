@@ -48,7 +48,9 @@ struct ReproduceCommand: AsyncParsableCommand {
             throw ExitCode(MutantKitExit.operationalError)
         }
 
-        let sandbox = try await prepareFreshSandbox(root: root, mutationID: point.id.rawValue)
+        let sandbox = try await prepareFreshSandbox(
+            root: root, mutationID: point.id.rawValue, linkSiblings: settings.project.linkSiblings ?? []
+        )
 
         let target = sandbox.appendingPathComponent(point.file)
         let applied = try applyAndReportMutation(point, fileAt: target)
