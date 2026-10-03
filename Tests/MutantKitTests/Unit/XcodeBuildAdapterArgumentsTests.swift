@@ -307,3 +307,41 @@ struct XcodeBuildAdapterSimulatorLeaseCoverageTests {
         #expect(!adapter(destination: "generic/platform=tvOS Simulator").destinationNeedsSimulatorLease)
     }
 }
+
+/// CI starts `mutantkit doctor` from the repository root while `--project-root`
+/// points at the app's subdirectory. Doctor used to run its xcodebuild checks in
+/// the current directory, found no workspace there, and failed
+/// `build-for-testing` with a bare exit 66.
+@Suite("Diagnostics: workspace")
+struct DiagnosticsWorkspaceTests {
+    private static let projectRoot = URL(fileURLWithPath: "/tmp/repo/iosApp")
+
+    private func adapter(projectPath: String?) -> XcodeBuildAdapter {
+        var configuration = Configuration()
+        configuration.project.path = projectPath
+        return XcodeBuildAdapter(
+            configuration: configuration,
+            kind: .xcodeWorkspace,
+            projectFile: Self.projectRoot.appendingPathComponent("App.xcworkspace"),
+            projectRoot: Self.projectRoot
+        )
+    }
+
+    @Test("Doctor checks run in the project root, not the current directory")
+    func usesProjectRoot() {
+        #expect(Diagnostics.workspace(for: adapter(projectPath: nil)) == Self.projectRoot)
+    }
+
+    @Test("A cwd-relative project.path does not move the checks away from the project root")
+    func ignoresCwdRelativeProjectPath() {
+        #expect(Diagnostics.workspace(for: adapter(projectPath: ".")) == Self.projectRoot)
+    }
+
+    @Test("The workspace file is found under the project root")
+    func workspaceFileIsUnderProjectRoot() {
+        let adapter = adapter(projectPath: nil)
+        let workspace = Diagnostics.workspace(for: adapter)
+        #expect(adapter.projectFileRelativePath == "App.xcworkspace")
+        #expect(workspace.appendingPathComponent("App.xcworkspace").path == "/tmp/repo/iosApp/App.xcworkspace")
+    }
+}
